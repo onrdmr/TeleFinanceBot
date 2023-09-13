@@ -1,6 +1,8 @@
 import os 
 import telebot
 
+import requests
+
 import random
 
 # send graph to telebot 
@@ -8,15 +10,15 @@ import numpy as np
 import pandas as pd
 
 
-import redis
+#import redis
 
 import yfinance as yf
-import plotly
+#import plotly
 
-import plotly.graph_objs as go
+#import plotly.graph_objs as go
 from telebot import types
 
-import translators as ts
+#import translators as ts
 
 API_KEY = os.getenv('API_KEY')
 bot = telebot.TeleBot(API_KEY)
@@ -67,22 +69,22 @@ HEPSI = ["HEPSI"]
 DATA = {"BIST_30": BIST_30,"BIST_50": BIST_50,  "BIST_100": BIST_100,"SPECIAL":SPECIAL,"HEPSI":HEPSI}
 
 
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+#redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-def set_translation(stock_name, description):
-    redis_client.set(stock_name, description)
+#def set_translation(stock_name, description):
+    #redis_client.set(stock_name, description)
 
-    return description
+    #return description
 
 def get_translations(stock_name, text):
-    description = redis_client.get(stock_name)
-    if description != None:
-        description=redis_client.get(stock_name).decode('utf-8')
+ #   description = redis_client.get(stock_name)
+ #   if description != None:
+ #       description=redis_client.get(stock_name).decode('utf-8')
     
-    if description is None:
-        description = ts.translate_text(translator='google', query_text=text, to_language='tr')
-        set_translation(stock_name, description)
-    return description
+#    if description is None:
+    #description = ts.translate_text(translator='google', query_text=text, to_language='tr')
+    #set_translation(stock_name, description)
+    return text#description
 
 def nple_array(array, count):
     subarrays = []
@@ -109,6 +111,7 @@ BIST_30 = read_stock_name(BIST_30)
 BIST_50 = read_stock_name(BIST_50)
 BIST_100 = read_stock_name(BIST_100)
 HEPSI = read_stock_name(HEPSI)
+VERIFIED = False
 
 choices = []
 user_stock = []
@@ -181,6 +184,7 @@ def main_menu_keyboard():
     return keyboard
 
 
+
 def add_continue_pagination(keyboard):
     keyboard.add(types.InlineKeyboardButton( "Hisseleri Görmeye Devam Et.", callback_data="continue_pagination" ))
 
@@ -248,36 +252,81 @@ def confirmation_keyboard(type):
 
 # bot.send_message("12345", text='Keyboard example', reply_markup=keyboard)
 
-
 # Define a handler for the '/start' command
 @bot.message_handler(commands=['start'])
 def handle_start(message):
-    keyboard = main_menu_keyboard()
+    global VERIFIED
 
-    # Send a welcome message to the user
-    bot.send_message(message.chat.id, '''
-        Merhaba Ben Gurme Finans Garson Bot
-        Sizlere görmek istediğiniz sinyal ile ilgili yardımcı olacağım.
-        Aşağıdaki menüden görmek istediğiniz sinyalleri seçebilirsiniz.
-        MENU
-        KOD ADI ~ AÇIKLAMA
-        BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin.
-        BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin.
-        ÖZEL : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin.
-        HEPSİ : Gelen sinyallerin hepsini seçin.
+    if not VERIFIED:
+        bot.send_message(message.chat.id, "Merhaba Ben Gurme Finans Garson Bot Sizi Yönlendireceğim Lütfen Dekont Numaranızı Girin. ")
+        
+
+    else:
+        keyboard = main_menu_keyboard()
+
+        # Send a welcome message to the user
+        bot.send_message(message.chat.id, '''
+            Merhaba Ben Gurme Finans Garson Bot
+            Sizlere görmek istediğiniz sinyal ile ilgili yardımcı olacağım.
+            Aşağıdaki menüden görmek istediğiniz sinyalleri seçebilirsiniz.
+            MENU
+            KOD ADI ~ AÇIKLAMA
+            BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin.
+            BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin.
+            ÖZEL : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin.
+            HEPSİ : Gelen sinyallerin hepsini seçin.
 
 
-        Not: Menüde seçmek isteğiniz özelliklerin kod adını geri dönüş yapmanız yeterli.'''
-    ,reply_markup=keyboard)
+            Not: Menüde seçmek isteğiniz özelliklerin kod adını geri dönüş yapmanız yeterli.'''
+        ,reply_markup=keyboard)
 
+
+
+# Define a handler for incoming text messages
+@bot.message_handler(func=lambda message: True)
+def handle_text(message):
+    global VERIFIED
+    # Echo the received message
+    #if not message.html_text.startswith("/"):
+    if not VERIFIED:
+        url = 'https://gurmefinanswebapi.indata.com.tr/airtable/pay-verification'
+        query_params = {'dekontNo': message.text}
+
+        # Send a POST request with the specified URL and query parameters
+        response = requests.post(url, params=query_params)
+        response_json = response.json()
+        if ( response_json["isOk"] == True ):
+            VERIFIED = True
+            keyboard = main_menu_keyboard()
+            bot.send_message( message.chat.id, response_json['message'] )
+            bot.send_message( message.chat.id, "Vip Linkiniz: " + response_json['telegramVIPLink'] )
+            # Send a welcome message to the user
+            bot.send_message(message.chat.id, '''
+                Merhaba Ben Gurme Finans Garson Bot
+                Sizlere görmek istediğiniz sinyal ile ilgili yardımcı olacağım.
+                Aşağıdaki menüden görmek istediğiniz sinyalleri seçebilirsiniz.
+                MENU
+                KOD ADI ~ AÇIKLAMA
+                BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin.
+                BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin.
+                ÖZEL : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin.
+                HEPSİ : Gelen sinyallerin hepsini seçin.
+
+
+                Not: Menüde seçmek isteğiniz özelliklerin kod adını geri dönüş yapmanız yeterli.'''
+            ,reply_markup=keyboard)
+        else:
+            bot.send_message( message.chat.id, response_json['message'] )
+
+  
 
 
 
 # TELEGRAM BOT
-@bot.message_handler(commands=['Greet'])
-def greeting(message):
-    keyboard = build_keyboard(3, [])
-    bot.reply_to(message, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
+# @bot.message_handler(commands=['Greet'])
+# def greeting(message):
+#    keyboard = build_keyboard(3, [])
+#    bot.reply_to(message, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
 
 
 @bot.callback_query_handler(func=lambda call: True)
