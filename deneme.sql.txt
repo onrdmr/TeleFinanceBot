@@ -1,0 +1,143 @@
+USE [PAPERMOON2]
+GO
+/****** Object:  UserDefinedFunction [dbo].[GET_COST]    Script Date: 9/20/2023 2:55:49 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+-- User Defined Function
+
+-- User Defined Function
+
+-- =======================================================================
+-- Author:        Mustafa Ener EFE
+-- Create date: 18.10.2011
+-- Description:   Şube bazlı maliyet bilgisi okunurken kullanılır. 
+--              Eğer şube belirtilmişse, tüm şubeler içindeki son maliyeti döndürür. 
+--              Birim belirtilmemişse ana birim cinsinden birim, belirtilmişse
+--              belirtilen birim cinsinden maliyeti döndürür.
+-- =======================================================================
+ALTER FUNCTION [dbo].[GET_COST] 
+(
+      @URUN_ID AS DECIMAL,
+      @BIRIM_ID AS INT,
+      @DEPO_ID AS DECIMAL,
+      @TARIH DATETIME
+)
+RETURNS FLOAT
+AS
+BEGIN
+      DECLARE @COST FLOAT
+      DECLARE @RECETE_COUNT INT
+      DECLARE @URETILEN BIT --Şubenin kaç deposunda üretildiği (0 ise o şubede üretilmiyor)
+	 DECLARE @DEVIR BIT
+
+      SELECT @RECETE_COUNT = COUNT(*) FROM ARG_CRM_RECETE_TANIM  WITH (NOLOCK) WHERE URUN_ID = @URUN_ID
+
+      SELECT @URETILEN = COUNT(*) FROM ARG_CRM_DEPO AS D  WITH (NOLOCK)  INNER JOIN ARG_CRM_URUN AS U  WITH (NOLOCK) ON 1 = 1 WHERE (D.DEPO_ID = ISNULL(@DEPO_ID,D.DEPO_ID)) AND (U.URUN_ID = @URUN_ID) AND (SELECT TOP(1) X.URUN_ID FROM dbo.ARG_CRM_URETILMEYEN AS X  WITH (NOLOCK) WHERE x.URUN_ID = U.URUN_ID AND X.DEPO_ID=D.DEPO_ID) IS NULL
+
+	 SELECT  @DEVIR = COUNT(*)
+	 FROM ARG_CRM_DEPO_ESLESTIR AS DE WITH (NOLOCK) 
+	   INNER JOIN ARG_CRM_DEPO AS D WITH (NOLOCK) ON DE.DEPO_ID = D.DEPO_ID 
+	   INNER JOIN ARG_CRM_URUN_STOK_DONEM AS USD WITH (NOLOCK) ON D.DEPO_ID = USD.DEPO_ID 
+	   LEFT OUTER JOIN ARG_CRM_HESAP_DONEM AS HD WITH (NOLOCK) ON USD.DONEM_ID = HD.HESAP_DONEM_ID 
+      WHERE (DE.KULLANICI_ID = 1) AND (USD.URUN_ID = @URUN_ID) AND (USD.DEPO_ID = ISNULL(@DEPO_ID, USD.DEPO_ID)) AND (HD.BASLANGIC_TARIHI < @TARIH) 
+
+
+      -- Reçetesi var ve o şubede üretiliyor..
+      IF (@RECETE_COUNT = 1) AND (@URETILEN > 0) AND (@DEVIR=0)
+            BEGIN
+                  DECLARE @RECETE_ID INT, @PORSIYON DECIMAL(18,6), @GIM_ORANI DECIMAL(18,6);
+                  SELECT @COST = 0, @RECETE_ID = RECETE_ID, @PORSIYON = PORSIYON_MIKTARI,@GIM_ORANI=ISNULL(GIM_ORAN,0) FROM ARG_CRM_RECETE_TANIM  WITH (NOLOCK) WHERE URUN_ID = @URUN_ID
+
+                  DECLARE @URUN_CINSI_ID INT, @FIRE_DAHIL_MIKTAR DECIMAL(18,6), @BIRIM_ID2 INT
+                  DECLARE CUR_FIYAT CURSOR FOR SELECT URUN_CINSI_ID, FIRE_DAHIL_MIKTAR, BIRIM_ID FROM ARG_CRM_RECETE_MAMUL  WITH (NOLOCK) WHERE RECETE_ID = @RECETE_ID
+                  OPEN CUR_FIYAT
+                  FETCH NEXT FROM CUR_FIYAT INTO @URUN_CINSI_ID,@FIRE_DAHIL_MIKTAR, @BIRIM_ID2
+                        WHILE @@FETCH_STATUS=0
+                        BEGIN
+							  DECLARE @COSTT AS DECIMAL(18,5)
+							  SET @COSTT=0
+							  SET @COSTT=	 (SELECT dbo.GET_COST(@URUN_CINSI_ID, @BIRIM_ID2, @DEPO_ID, @TARIH))
+                              SET @COST = @COST +  @FIRE_DAHIL_MIKTAR *@COSTT
+							  SET @COSTT=0
+                              FETCH NEXT FROM CUR_FIYAT INTO @URUN_CINSI_ID, @FIRE_DAHIL_MIKTAR, @BIRIM_ID2
+                        END
+                  SET @COST = @COST / @PORSIYON * CASE 
+                                                                        WHEN @BIRIM_ID IS NULL THEN 1 
+                                                                        ELSE (SELECT KATSAYI FROM ARG_CRM_URUN_BIRIM_SETI  WITH (NOLOCK) WHERE URUN_ID = @URUN_ID AND ALT_BIRIM_SETI_ID = @BIRIM_ID)
+                                                                  END;
+                  IF @GIM_ORANI>0
+                  BEGIN
+					SET @COST = @COST / 100 * ( 100 + @GIM_ORANI);
+                  END
+                                                                  
+                  CLOSE CUR_FIYAT
+                  DEALLOCATE CUR_FIYAT
+            END
+
+         -- Reçetesi var ve o şubede üretiliyor.. devir varsa
+      ELSE IF ((@RECETE_COUNT = 1) AND (@URETILEN > 0)) OR (@DEVIR>0)
+             BEGIN
+            SELECT TOP(1)@COST = UMG.MALIYET * CASE 
+            WHEN @BIRIM_ID IS NULL THEN 1
+            ELSE 
+            BS.KATSAYI 
+--ELSE            1
+            END
+                   FROM ARG_CRM_URUN_MALIYET_GUN AS UMG  WITH (NOLOCK)
+
+                  INNER JOIN
+                                     ARG_CRM_DEPO AS GM  WITH (NOLOCK) ON UMG.DEPO_ID = GM.DEPO_ID 
+            INNER JOIN  ARG_CRM_FIRMA_GENEL AS FG  WITH (NOLOCK)  ON FG.FIRMA_ID = GM.SUBE_ID
+            INNER JOIN ARG_CRM_URUN_BIRIM_SETI BS  WITH (NOLOCK) ON BS.URUN_ID=UMG.URUN_ID AND BS.ALT_BIRIM_SETI_ID=ISNULL(@BIRIM_ID,BS.ALT_BIRIM_SETI_ID)
+      WHERE     
+                         (UMG.MALIYET > 0) AND
+                                    (UMG.URUN_ID = @URUN_ID) 
+                              AND (UMG.DEPO_ID  = ISNULL(@DEPO_ID,UMG.DEPO_ID )) 
+
+                              AND (UMG.TARIH <= ISNULL(@TARIH, GETDATE()))
+                              AND UMG.TARIH>='01.01.2016'
+                 ORDER BY UMG.TARIH DESC
+
+
+            END
+
+      -- Reçetesi yok veya reçetesi var ama o şubede üretilmiyor              
+      ELSE IF (@RECETE_COUNT = 0) OR ((@RECETE_COUNT = 1) AND (@URETILEN = 0))
+            BEGIN
+            SELECT TOP(1)@COST = UMG.MALIYET * CASE 
+            WHEN @BIRIM_ID IS NULL THEN 1
+            ELSE 
+            BS.KATSAYI 
+--ELSE            1
+            END
+                   FROM ARG_CRM_URUN_MALIYET_GUN AS UMG  WITH (NOLOCK)
+
+                  INNER JOIN
+                                     ARG_CRM_DEPO AS GM  WITH (NOLOCK) ON UMG.DEPO_ID = GM.DEPO_ID 
+            INNER JOIN  ARG_CRM_FIRMA_GENEL AS FG  WITH (NOLOCK)  ON FG.FIRMA_ID = GM.SUBE_ID
+            INNER JOIN ARG_CRM_URUN_BIRIM_SETI BS  WITH (NOLOCK) ON BS.URUN_ID=UMG.URUN_ID AND BS.ALT_BIRIM_SETI_ID=ISNULL(@BIRIM_ID,BS.ALT_BIRIM_SETI_ID)
+      WHERE     
+                         (UMG.MALIYET > 0) AND
+                                    (UMG.URUN_ID = @URUN_ID) 
+                              AND (UMG.DEPO_ID  = ISNULL(@DEPO_ID,UMG.DEPO_ID )) 
+
+                              AND (UMG.TARIH <= ISNULL(@TARIH, GETDATE()))
+                              AND UMG.TARIH>='01.01.2016'
+                 ORDER BY UMG.TARIH DESC
+
+
+            END
+
+      ELSE
+            BEGIN
+            SET @COST=-1
+            END
+
+      RETURN ISNULL(@COST, 0);
+
+END
+
+

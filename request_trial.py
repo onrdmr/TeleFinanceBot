@@ -1,7 +1,11 @@
 import requests
 from bs4 import BeautifulSoup
+import json
 
 # URL of the web page containing the table
+
+url = 'https://gurmefinanswebapi.indata.com.tr/share/db-create'
+
 
 ALL=["ALL", "https://uzmanpara.milliyet.com.tr/canli-borsa/bist-TUM-hisseleri/"]
 BIST_30=["BIST_30", "https://uzmanpara.milliyet.com.tr/canli-borsa/bist-30-hisseleri/"]
@@ -50,4 +54,32 @@ write_stock_names(ALL)
 write_stock_names(BIST_100)
 write_stock_names(BIST_50)
 write_stock_names(BIST_30)
+
+data = []
+for i in range(2, len(ALL)):
+    data.append({"name": ALL[i], "type": "ALL"})
+
+headers = {'Content-Type': 'application/json'}
+data = json.dumps(data)
+response=requests.post(url=url, data=data, headers=headers)
+
+data = []
+for i in range(2, len(BIST_100)):
+    data.append({"name": BIST_100[i], "type": "BIST_100"})
+
+response=requests.post(url=url, data=data, headers=headers)
+
+data = []
+for i in range(2, len(BIST_50)):
+    data.append({"name": BIST_50[i], "type": "BIST_50"})
+
+response=requests.post(url=url, data=data, headers=headers)
+
+data = []
+for i in range(2, len(BIST_30)):
+    data.append({"name": BIST_30[i], "type": "BIST_30"})
+
+response=requests.post(url=url, data=data, headers=headers)
+
+
 
