@@ -351,7 +351,7 @@ def handle_text(message):
         if ( response_json["isOk"] == True ):
             userRestriction.verified = True
 
-            data = {"name": userRestriction.firstName , "lastName": userRestriction.lastName, "userName": userRestriction.userName, "chatId": userRestriction.chat_id }
+            data = {"name": (userRestriction.firstName if userRestriction.firstName else "" ) , "lastName": (userRestriction.lastName if userRestriction.lastName else "" ), "userName": (userRestriction.userName if userRestriction.userName else ""), "chatId": str(userRestriction.chat_id) }
             response = requests.post ( url = user_db_create_url, data = json.dumps(data) ,  headers=headers)
 
             redis_client.set(message.chat.id, pickle.dumps(userRestriction))

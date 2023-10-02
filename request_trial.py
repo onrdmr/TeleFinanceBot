@@ -66,18 +66,21 @@ response=requests.post(url=url, data=data, headers=headers)
 data = []
 for i in range(2, len(BIST_100)):
     data.append({"name": BIST_100[i], "type": "BIST_100"})
+data = json.dumps(data)
 
 response=requests.post(url=url, data=data, headers=headers)
 
 data = []
 for i in range(2, len(BIST_50)):
     data.append({"name": BIST_50[i], "type": "BIST_50"})
+data = json.dumps(data)
 
 response=requests.post(url=url, data=data, headers=headers)
 
 data = []
 for i in range(2, len(BIST_30)):
     data.append({"name": BIST_30[i], "type": "BIST_30"})
+data = json.dumps(data)
 
 response=requests.post(url=url, data=data, headers=headers)
 
