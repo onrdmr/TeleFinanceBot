@@ -17,6 +17,8 @@ import pickle
 import yfinance as yf
 #import plotly
 
+from dotenv import load_dotenv
+load_dotenv()
 #import plotly.graph_objs as go
 from telebot import types
 
