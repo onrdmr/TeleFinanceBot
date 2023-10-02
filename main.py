@@ -94,6 +94,7 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/user/db-create"
 share_and_user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-create" # 
 share_db_create = "https://gurmefinanswebapi.indata.com./share/db-create" # bu gereksiz olabilir.
+share_and_user_db_delete = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-delete" #
 headers = {'Content-Type': 'application/json'}
 
 
@@ -517,11 +518,14 @@ def handle_button_press(call):
         else:
             userRestriction.choices.remove(index)
             userRestriction.user_stock.remove(call.data) if call.data in userRestriction.user_stock else userRestriction.user_stock
+            
+            
+
             keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
 
-            data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
-            response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
+            data = {"chatId": str(userRestriction.chat_id) , "shareCode": [call.data] }
+            response = requests.delete ( url = share_and_user_db_delete, data = json.dumps(data) ,  headers=headers)
             
             
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][index] + " kaldırıldı\n", reply_markup=keyboard)
@@ -600,11 +604,13 @@ def handle_button_press(call):
 
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
 
-            data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
-            response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
+            code = list(set(DATA[userRestriction.menu_choice][1:]))
+
+            data = {"chatId": str(userRestriction.chat_id) , "shareCode": code[1:] } # 5956951460
+            response = requests.delete( url = share_and_user_db_delete, data = json.dumps(data) ,  headers=headers)
             
 
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " hepsini sildiniz.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
