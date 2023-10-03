@@ -96,7 +96,11 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/user/db-create"
 share_and_user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-create" # 
 share_db_create = "https://gurmefinanswebapi.indata.com./share/db-create" # bu gereksiz olabilir.
+
 share_and_user_db_delete = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-delete" #
+share_and_user_me_follow_share = "https://gurmefinanswebapi.indata.com.tr/shareanduser/me-follow-share"
+
+
 headers = {'Content-Type': 'application/json'}
 
 
@@ -237,7 +241,8 @@ def build_keyboard_pagination(row_width, actives, i, menu_choice):
     for  stocks in nple_array(DATA[menu_choice][i*100+1:], row_width):
         buttons = []
         for j in range(row_width):
-            actives = [value for value in actives if value >= ( 100 * (i) ) and value < ( 100 * (i+1) )]
+            
+            actives = [value for value in actives if value >= ( 100 * (i) ) and value <= ( 100 * (i+1) )]
             item = ( order + (100 * i) ) 
             if (item in actives):
                 if j < len(stocks) and stocks[j] != None and stocks[j] != '':
@@ -301,20 +306,46 @@ def handle_start(message):
     userRestriction = redis_client.get(message.chat.id)
     
     if userRestriction is None:
-        bot.send_message(message.chat.id, "Merhaba Ben Gurme Finans Garson Bot Sizi Yönlendireceğim Lütfen Dekont Numaranızı Girin. ")
-        userRestriction = UserRestriction()
-        userRestriction.createdTime = datetime.now()
-        userRestriction.verified = False
-        userRestriction.chat_id = message.chat.id
-        userRestriction.firstName = message.chat.first_name
-        userRestriction.lastName = message.chat.last_name
-        userRestriction.userName = message.from_user.username
-        
-        
-        # deneme = pickle.loads(serialized_object)
-    
-        redis_client.set( message.chat.id, pickle.dumps(userRestriction) )
 
+        query_params = {'chatId': message.chat.id}
+        response = requests.get(share_and_user_me_follow_share, params=query_params)
+        if response.status_code == 200 :
+            stock_list = json.loads(response.text)
+
+            if stock_list.size() == 0:
+                bot.send_message(message.chat.id, "Merhaba Ben Gurme Finans Garson Bot Sizi Yönlendireceğim Lütfen Dekont Numaranızı Girin. ")
+                userRestriction = UserRestriction()
+                userRestriction.createdTime = datetime.now()
+                userRestriction.verified = False
+                userRestriction.chat_id = message.chat.id
+                userRestriction.firstName = message.chat.first_name
+                userRestriction.lastName = message.chat.last_name
+                userRestriction.userName = message.from_user.username
+                redis_client.set( message.chat.id, pickle.dumps(userRestriction) )
+        
+            else:
+                userRestriction = sync_redis(userRestriction, message.chat.id)
+                if userRestriction.verified:
+                    keyboard = main_menu_keyboard()
+
+                    # Send a welcome message to the user
+                    bot.send_message(message.chat.id, '''
+                        Merhaba Ben Gurme Finans Garson Bot
+                        Sizlere görmek istediğiniz sinyal ile ilgili yardımcı olacağım.
+                        Aşağıdaki menüden görmek istediğiniz sinyalleri seçebilirsiniz.
+                        MENU
+                        KOD ADI ~ AÇIKLAMA
+                        BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin veya çıkarın.
+                        BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin veya çıkarın.
+                        TAKIP_EDILEN : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin veya çıkarın.
+                        HEPSİ : Gelen sinyallerin hepsini seçin veya çıkarın.
+
+
+                        Not: Menüde seçmek isteğiniz özelliklerin kod adını geri dönüş yapmanız yeterli.'''
+                    , reply_markup=keyboard)
+
+                else:
+                    bot.send_message(message.chat.id, "Merhaba Ben Gurme Finans Garson Bot Sizi Yönlendireceğim Lütfen Dekont Numaranızı Girin. ")
         
 
         #aa = redis_client.get(message.chat.id)
@@ -323,6 +354,7 @@ def handle_start(message):
 
     else:
         userRestriction = pickle.loads(userRestriction)
+        userRestriction = sync_redis(userRestriction, message.chat.id)
         if userRestriction.verified:
             keyboard = main_menu_keyboard()
 
@@ -333,10 +365,10 @@ def handle_start(message):
                 Aşağıdaki menüden görmek istediğiniz sinyalleri seçebilirsiniz.
                 MENU
                 KOD ADI ~ AÇIKLAMA
-                BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin.
-                BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin.
-                ÖZEL : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin.
-                HEPSİ : Gelen sinyallerin hepsini seçin.
+                BIST30 : Gelen sinyaller içerisinden sadece BIST30 olan sinyalleri şeçin veya çıkarın.
+                BIST100 : Gelen sinyaller içerisinden sadece BIST100 olan sinyalleri seçin veya çıkarın.
+                TAKIP_EDILEN : Gelen sinyaller içerisinden seçmiş olduklarınızı görüntüleyin veya çıkarın.
+                HEPSİ : Gelen sinyallerin hepsini seçin veya çıkarın.
 
 
                 Not: Menüde seçmek isteğiniz özelliklerin kod adını geri dönüş yapmanız yeterli.'''
@@ -406,6 +438,31 @@ def handle_text(message):
 #    keyboard = build_keyboard(3, [])
 #    bot.reply_to(message, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
 
+def sync_redis(userRestriction, chat_id):
+    if ( userRestriction is not None) :
+        query_params = {'chatId': chat_id}
+
+        # Send a POST request with the specified URL and query parameters
+        
+        response = requests.get(share_and_user_me_follow_share, params=query_params)
+        stock_list = json.loads(response.text)
+        
+        choice_list = []
+        for stock in stock_list:
+            stock_index = HEPSI.index(stock)
+            choice_list.append(stock_index)
+
+        userRestriction.choices = sorted(choice_list if choice_list else [])
+        userRestriction.user_stock = stock_list 
+        redis_client.set(chat_id, pickle.dumps(userRestriction))
+
+        return userRestriction
+    
+    else:
+        return None
+
+
+
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_button_press(call):
@@ -423,7 +480,7 @@ def handle_button_press(call):
     bot.answer_callback_query(call.id, random_element)
     if ('main_menu' == call.data):
         userRestriction.pagination_idx = 0
-        redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
+        userRestriction = sync_redis(userRestriction, call.from_user.id)
 
         handle_start(call.message)
     elif('menu' in call.data):
@@ -548,8 +605,11 @@ def handle_button_press(call):
             userRestriction.user_stock.remove(call.data) if call.data in userRestriction.user_stock else userRestriction.user_stock
             
             
-
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
+            
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
 
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": [call.data] }
@@ -596,8 +656,10 @@ def handle_button_press(call):
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock[1:] }
             response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
             
-
-            keyboard = build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard = build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " hepsini seçtiniz.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
@@ -614,7 +676,12 @@ def handle_button_press(call):
 
     elif call.data == 'add_all_no':
         if userRestriction.menu_choice == DATA[userRestriction.menu_choice][0]:
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " Sofranız hazır.\n\n", reply_markup=keyboard)
             if userRestriction.menu_choice == BIST_100[0]:
                 keyboard = types.InlineKeyboardMarkup()
@@ -637,8 +704,10 @@ def handle_button_press(call):
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": code[1:] } # 5956951460
             response = requests.delete( url = share_and_user_db_delete, data = json.dumps(data) ,  headers=headers)
             
-
-            keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " hepsini sildiniz.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
@@ -654,7 +723,13 @@ def handle_button_press(call):
 
     elif call.data == 'remove_all_no':
         if userRestriction.menu_choice == DATA[userRestriction.menu_choice][0]:
-            keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
+            
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
+            
+            
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " sofranız hazır.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
