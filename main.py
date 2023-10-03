@@ -18,7 +18,7 @@ import yfinance as yf
 #import plotly
 
 from dotenv import load_dotenv
-load_dotenv()
+#load_dotenv()
 #import plotly.graph_objs as go
 from telebot import types
 
@@ -151,9 +151,9 @@ def yahoo_info_bist(stock_name):
 
     info = ticker.info
 
-    long_name = info['longName']
+    long_name = info['longName'] if info.get('currentPrice') else ""
 
-    stock_info = f"KOD: #{stock_name} \nADI:{long_name} \nGüncel Fiyat:{info['currentPrice']}TL \n\nFaaliyet:{get_translations(stock_name, info['longBusinessSummary'])}"
+    stock_info = f"KOD: #{stock_name} \nADI:{long_name} \nGüncel Fiyat:{ info['currentPrice'] if info.get('currentPrice') else '' }TL \n\nFaaliyet:{get_translations(stock_name, info['longBusinessSummary']) if info.get('longBusinessSummary') else ''}"
 
     return stock_info
 
@@ -236,13 +236,15 @@ def build_keyboard_pagination(row_width, actives, i, menu_choice):
     order = 1
     for  stocks in nple_array(DATA[menu_choice][i*100+1:], row_width):
         buttons = []
-        for i in range(row_width):
-            if (order in actives):
-                if i < len(stocks) and stocks[i] != None and stocks[i] != '':
-                    buttons.append(types.InlineKeyboardButton(str(order)+ "." + stocks[i] + "✅", callback_data=stocks[i]))
+        for j in range(row_width):
+            actives = [value for value in actives if value >= ( 100 * (i) ) and value < ( 100 * (i+1) )]
+            item = ( order + (100 * i) ) 
+            if (item in actives):
+                if j < len(stocks) and stocks[j] != None and stocks[j] != '':
+                    buttons.append(types.InlineKeyboardButton(str(order)+ "." + stocks[j] + "✅", callback_data = stocks[j]))
             else:
-                if i < len(stocks) and stocks[i] != None and stocks[i] != '':
-                    buttons.append(types.InlineKeyboardButton(str(order)+ "." + stocks[i], callback_data=stocks[i]))
+                if j < len(stocks) and stocks[j] != None and stocks[j] != '':
+                    buttons.append(types.InlineKeyboardButton(str(order)+ "." + stocks[j], callback_data = stocks[j]))
             order += 1
         keyboard.add(*buttons)
 
@@ -482,7 +484,7 @@ def handle_button_press(call):
             bot.send_message(call.message.chat.id, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
             
             keyboard = types.InlineKeyboardMarkup()
-            add_continue_pagination(keyboard)
+            keyboard = add_continue_pagination(keyboard)
             add_settings_keyboard(keyboard, userRestriction.menu_choice)
 
             bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
@@ -498,8 +500,7 @@ def handle_button_press(call):
             keyboard = types.InlineKeyboardMarkup(row_width=3)
 
             keyboard = build_keyboard_follow( keyboard, 3, userRestriction.user_stock, userRestriction.menu_choice)
-            for stock in userRestriction.user_stock:
-                bot.send_message(call.message.chat.id, stock)
+            bot.send_message(call.message.chat.id, str(userRestriction.user_stock))
             bot.send_message(call.message.chat.id, "Hisselerinizi seçmeye devam edin." , reply_markup=keyboard)
 
 
@@ -519,7 +520,12 @@ def handle_button_press(call):
         if index not in userRestriction.choices:
             userRestriction.choices.append(index)
             userRestriction.user_stock.append(call.data)
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            
+            if userRestriction.menu_choice == HEPSI[0] :
+                keyboard = build_keyboard_pagination(3, userRestriction.choices, userRestriction.pagination_idx, userRestriction.menu_choice)
+            else:
+                keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
 
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
@@ -591,7 +597,7 @@ def handle_button_press(call):
             response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
             
 
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            keyboard = build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " hepsini seçtiniz.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
@@ -639,11 +645,16 @@ def handle_button_press(call):
                 keyboard = types.InlineKeyboardMarkup()
                 keyboard = add_settings_keyboard(keyboard, userRestriction.menu_choice)
                 bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
+            if userRestriction.menu_choice == HEPSI[0]:
+                keyboard = types.InlineKeyboardMarkup()
+                keyboard = add_continue_pagination(keyboard)
+                keyboard = add_settings_keyboard(keyboard, userRestriction.menu_choice)
+                bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
 
 
     elif call.data == 'remove_all_no':
         if userRestriction.menu_choice == DATA[userRestriction.menu_choice][0]:
-            keyboard=build_keyboard(3,userRestriction.choices, userRestriction.menu_choice)
+            keyboard=build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
             bot.send_message(call.message.chat.id, DATA[userRestriction.menu_choice][0] + " sofranız hazır.\n\n", reply_markup=keyboard)
 
             if userRestriction.menu_choice == BIST_100[0]:
@@ -652,15 +663,15 @@ def handle_button_press(call):
                 bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
 
     elif call.data == 'continue_pagination':
-        userRestriction.pagination_idx+=1
-        userRestriction.choices = []
+        userRestriction.pagination_idx += 1
+        # userRestriction.choices = []
         redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
 
         data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
         response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
-            
 
-        call.data = 'menu'+HEPSI[0]
+
+        call.data = 'menu' + HEPSI[0]
         handle_button_press(call)
 
     else :
