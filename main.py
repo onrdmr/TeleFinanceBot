@@ -250,6 +250,11 @@ def build_keyboard_pagination(row_width, actives, i, menu_choice):
 
     return keyboard
 
+def build_keyboard_follow(keyboard, row_width, stocks, menu_choice):
+
+    keyboard.add(types.InlineKeyboardButton( "Ana Menüye Dön", callback_data="main_menu" ))
+
+    return keyboard
 
 def build_keyboard(row_width, actives, menu_choice):
 
@@ -271,12 +276,8 @@ def build_keyboard(row_width, actives, menu_choice):
             order += 1
         keyboard.add(*buttons)
 
-    if menu_choice != TAKIP_EDILEN[0]:
-        
-        add_settings_keyboard(keyboard, menu_choice)
-    else :
-        keyboard.add(types.InlineKeyboardButton( "Ana Menüye Dön", callback_data="main_menu" ))
-
+    add_settings_keyboard(keyboard, menu_choice)
+    
     return keyboard
 
 def confirmation_keyboard(type, menu_choice):
@@ -491,11 +492,15 @@ def handle_button_press(call):
             userRestriction.menu_choice = TAKIP_EDILEN[0]
             #keyboard = build_keyboard(3, [], userRestriction.menu_choice)
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
-            DATA[TAKIP_EDILEN[0]] = [TAKIP_EDILEN[0]] + userRestriction.user_stock # sonradan bu da redise gömülecek en azından seçilen kısmı
+            #DATA[TAKIP_EDILEN[0]] = [TAKIP_EDILEN[0]] + userRestriction.user_stock # sonradan bu da redise gömülecek en azından seçilen kısmı
 
-            
-            keyboard = build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
-            bot.send_message(call.message.chat.id, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
+            # bot.send_message(call.message.chat.id, userRestriction.user_stock)
+            keyboard = types.InlineKeyboardMarkup(row_width=3)
+
+            keyboard = build_keyboard_follow( keyboard, 3, userRestriction.user_stock, userRestriction.menu_choice)
+            for stock in userRestriction.user_stock:
+                bot.send_message(call.message.chat.id, stock)
+            bot.send_message(call.message.chat.id, "Hisselerinizi seçmeye devam edin." , reply_markup=keyboard)
 
 
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
