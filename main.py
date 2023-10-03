@@ -67,10 +67,10 @@ menu_choice = "BIST_30" # 0, 1, 2, 3
 BIST_30 = ["BIST_30"]
 BIST_50 = ["BIST_50"]
 BIST_100 = ["BIST_100"]
-SPECIAL= ["SECILEN"]
+TAKIP_EDILEN = ["TAKIP_EDILEN"]
 HEPSI = ["HEPSI"]
 
-DATA = {"BIST_30": BIST_30,"BIST_50": BIST_50,  "BIST_100": BIST_100,"SPECIAL":SPECIAL,"HEPSI":HEPSI}
+DATA = {"BIST_30": BIST_30,"BIST_50": BIST_50,  "BIST_100": BIST_100,"TAKIP_EDILEN":TAKIP_EDILEN,"HEPSI":HEPSI}
 
 class UserRestriction:
     chat_id : int
@@ -207,6 +207,7 @@ def main_menu_keyboard():
 
     keyboard.add(types.InlineKeyboardButton( BIST_30[0] , callback_data="menu_" + BIST_30[0] ))
     keyboard.add(types.InlineKeyboardButton( BIST_50[0] , callback_data="menu_"+ BIST_50[0] ))
+    keyboard.add(types.InlineKeyboardButton( TAKIP_EDILEN[0] , callback_data="menu_"+ TAKIP_EDILEN[0] ))
     keyboard.add(types.InlineKeyboardButton( BIST_100[0] , callback_data="menu_"+BIST_100[0] ))
     keyboard.add(types.InlineKeyboardButton( HEPSI[0] , callback_data="menu" + HEPSI[0] ))
     keyboard.add(types.InlineKeyboardButton( "Halka Arzlar" , callback_data="menu_PUBLICSOON" ))
@@ -254,10 +255,13 @@ def build_keyboard(row_width, actives, menu_choice):
 
     keyboard = types.InlineKeyboardMarkup(row_width=row_width)
 
+
+
     order = 1
     for  stocks in nple_array(DATA[menu_choice][1:], row_width):
         buttons = []
         for i in range(row_width):
+            
             if (order in actives):
                 if i < len(stocks) and stocks[i] != None and stocks[i] != '':
                     buttons.append(types.InlineKeyboardButton(str(order)+ "." + stocks[i] + "✅", callback_data=stocks[i]))
@@ -267,7 +271,11 @@ def build_keyboard(row_width, actives, menu_choice):
             order += 1
         keyboard.add(*buttons)
 
-    add_settings_keyboard(keyboard, menu_choice)
+    if menu_choice != TAKIP_EDILEN[0]:
+        
+        add_settings_keyboard(keyboard, menu_choice)
+    else :
+        keyboard.add(types.InlineKeyboardButton( "Ana Menüye Dön", callback_data="main_menu" ))
 
     return keyboard
 
@@ -411,6 +419,9 @@ def handle_button_press(call):
 
     bot.answer_callback_query(call.id, random_element)
     if ('main_menu' == call.data):
+        userRestriction.pagination_idx = 0
+        redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
+
         handle_start(call.message)
     elif('menu' in call.data):
         if(BIST_30[0] in call.data):
@@ -476,16 +487,20 @@ def handle_button_press(call):
             bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
 
 
-        elif(SPECIAL[0] in call.data):
-            userRestriction.menu_choice = SPECIAL[0]
-            keyboard = build_keyboard(3, [], userRestriction.menu_choice)
+        elif(TAKIP_EDILEN[0] in call.data):
+            userRestriction.menu_choice = TAKIP_EDILEN[0]
+            #keyboard = build_keyboard(3, [], userRestriction.menu_choice)
             redis_client.set(call.from_user.id, pickle.dumps(userRestriction))
+            DATA[TAKIP_EDILEN[0]] = [TAKIP_EDILEN[0]] + userRestriction.user_stock # sonradan bu da redise gömülecek en azından seçilen kısmı
+
             
+            keyboard = build_keyboard(3, userRestriction.choices, userRestriction.menu_choice)
+            bot.send_message(call.message.chat.id, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
+
+
             data = {"chatId": str(userRestriction.chat_id) , "shareCode": userRestriction.user_stock }
             response = requests.post ( url = share_and_user_db_create_url, data = json.dumps(data) ,  headers=headers)
             
-
-            bot.send_message(call.message.chat.id, "Hadi lokma lokma hisselerinizi seçin. ", reply_markup=keyboard)
 
         else:
             bot.send_message(call.message.chat.id, "Halka Arzlar Pek Yakında.\n\n")
@@ -539,7 +554,7 @@ def handle_button_press(call):
 
             if userRestriction.menu_choice == HEPSI[0]:
                 keyboard = add_continue_pagination(keyboard)
-                keyboard = add_settings_keyboard(keyboard)
+                keyboard = add_settings_keyboard(keyboard, userRestriction.menu_choice)
                 bot.send_message(call.message.chat.id, "Sofranız hazır mı?.\n\n", reply_markup=keyboard)
 
     elif call.data == 'add_all':
