@@ -92,13 +92,15 @@ class UserRestriction:
 
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-# controllers
-user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/user/db-create"
-share_and_user_db_create_url = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-create" # 
-share_db_create = "https://gurmefinanswebapi.indata.com./share/db-create" # bu gereksiz olabilir.
+api_url =  os.getenv('API_URL')
 
-share_and_user_db_delete = "https://gurmefinanswebapi.indata.com.tr/shareanduser/db-delete" #
-share_and_user_me_follow_share = "https://gurmefinanswebapi.indata.com.tr/shareanduser/me-follow-share"
+# controllers
+user_db_create_url = api_url + "/user/db-create"
+share_and_user_db_create_url = api_url + "/shareanduser/db-create" # 
+share_db_create = api_url + "/share/db-create" # bu gereksiz olabilir.
+
+share_and_user_db_delete = api_url + "/shareanduser/db-delete" #
+share_and_user_me_follow_share = api_url + "/shareanduser/me-follow-share"
 
 
 headers = {'Content-Type': 'application/json'}
@@ -388,7 +390,7 @@ def handle_text(message):
     userRestriction = pickle.loads(userRestriction)
 
     if userRestriction is not None:
-        url = 'https://gurmefinanswebapi.indata.com.tr/airtable/pay-verification'
+        url = api_url + '/airtable/pay-verification'
         query_params = {'dekontNo': message.text}
 
         # Send a POST request with the specified URL and query parameters
