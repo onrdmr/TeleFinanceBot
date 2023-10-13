@@ -18,7 +18,7 @@ import yfinance as yf
 #import plotly
 
 from dotenv import load_dotenv
-#load_dotenv()
+load_dotenv()
 #import plotly.graph_objs as go
 from telebot import types
 
@@ -314,7 +314,7 @@ def handle_start(message):
         if response.status_code == 200 :
             stock_list = json.loads(response.text)
 
-            if stock_list.size() == 0:
+            if len(stock_list) == 0:
                 bot.send_message(message.chat.id, "Merhaba Ben Gurme Finans Garson Bot Sizi Yönlendireceğim Lütfen Dekont Numaranızı Girin. ")
                 userRestriction = UserRestriction()
                 userRestriction.createdTime = datetime.now()
