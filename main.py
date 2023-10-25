@@ -155,12 +155,15 @@ user_stock = []
 def yahoo_info_bist(stock_name):
     ticker = yf.Ticker(stock_name+".IS") # BIST
 
-    info = ticker.info
+    try:
+        info = ticker.info
 
-    long_name = info['longName'] if info.get('currentPrice') else ""
+        long_name = info['longName'] if info.get('currentPrice') else ""
 
-    stock_info = f"KOD: #{stock_name} \nADI:{long_name} \nGüncel Fiyat:{ info['currentPrice'] if info.get('currentPrice') else '' }TL \n\nFaaliyet:{get_translations(stock_name, info['longBusinessSummary']) if info.get('longBusinessSummary') else ''}"
-
+        stock_info = f"KOD: #{stock_name} \nADI:{long_name} \nGüncel Fiyat:{ info['currentPrice'] if info.get('currentPrice') else '' }TL \n\nFaaliyet:{get_translations(stock_name, info['longBusinessSummary']) if info.get('longBusinessSummary') else ''}"
+    except Exception as e:
+        print(e)
+        return "Bilgi bulunamadı."
     return stock_info
 
 '''
@@ -409,6 +412,8 @@ def handle_text(message):
             bot.send_message( message.chat.id, "Vip Linkiniz: " + response_json['telegramVIPLink'] )
             bot.send_message( message.chat.id, "Destek Linkiniz: " + response_json['telegramDestekChannelLink'] )
             bot.send_message( message.chat.id, "Bist 30 Linkiniz: " + response_json['telegramBIST30Link'] )
+            bot.send_message( message.chat.id, "Özel Kanal Linkiniz: " + "https://t.me/Gurme_Sef_Bot" )
+
 
             
             # Send a welcome message to the user
