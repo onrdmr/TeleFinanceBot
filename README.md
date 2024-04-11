@@ -6,4 +6,4 @@ Telegramn için finans botu içerisinde butonlar ile seçim yapar ve kullanıcı
     python3 main.py
 
 # yahoo finance kapalı ise de çalışmasını istiyorsanız
-    python3 auto-start.py
+    python3 auto_start.py
